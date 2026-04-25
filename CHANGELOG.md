@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1-preview.0] — 2026-04-25
+
+### Production-readiness improvements
+
+Validated `npm install`, `npm run typecheck`, `npm test`, and `npm run build`
+all pass clean from a cold checkout. Cross-referenced the engine against
+`tymur999/sol-incinerator-oss` and the Solana cookbook close-account
+recipe; applied the deltas below.
+
+### Added
+
+- **Mint blacklist** — `AppSettings.mintBlacklist` (default: USDC and USDT
+  mainnet mints). Blacklisted mints are never burned or closed, even if
+  options would otherwise allow it. Editable in the GUI under
+  Options → Advanced.
+- **ComputeBudget per transaction** — every batch now prepends
+  `setComputeUnitLimit` (≈4k CU per instruction + 5k overhead) and
+  `setComputeUnitPrice` when the priority-fee setting is non-zero, so the
+  scheduler treats each tx with a deterministic CU envelope.
+- **Per-tx retry loop** with classification: blockhash-expired, rate-limit
+  (429/503), timeout, and "fetch failed" errors retry up to 3 times with
+  linear back-off; non-transient errors fail fast. `sendTransaction`'s own
+  internal `maxRetries` raised from 3 to 5.
+- **Sweep tx accounted for in dry-run fee estimate** — previously the
+  preview undershot the fee total by one tx per wallet.
+
+### Changed
+
+- **Batch size**: empirical packing rules informed by the OSS reference:
+  up to 12 close-only instructions per tx (down from 14 used by single-sig
+  reference tooling, to leave headroom for the second signature in our
+  fee-payer architecture); up to 10 instructions when any Burn is in the
+  batch (≈5 burn+close pairs). Burn+Close pairs are atomic — never split.
+- **Priority-fee preview** is now CU-aware (`μλ × CU / 1e6`) rather than
+  the previous flat-rate approximation, so the GUI matches what the
+  scheduler will actually charge.
+
 ## [0.1.0-preview.0] — 2026-04-25
 
 ### Initial preview

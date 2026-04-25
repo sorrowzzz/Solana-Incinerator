@@ -58,6 +58,31 @@ export function OptionsSection({ settings, patch }: Props): JSX.Element {
           <span className="field-hint">0 disables. Try 1000–10000 during congestion.</span>
         </label>
       </div>
+
+      <details className="advanced">
+        <summary>Advanced — mint blacklist</summary>
+        <label className="field" style={{ marginTop: 10 }}>
+          <span className="field-label">Mints to never touch (one per line)</span>
+          <textarea
+            className="wallets-input"
+            rows={4}
+            spellCheck={false}
+            value={(settings.mintBlacklist ?? []).join('\n')}
+            onChange={(e) =>
+              patch({
+                mintBlacklist: e.target.value
+                  .split(/\r?\n/)
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0)
+              })
+            }
+          />
+          <span className="field-hint">
+            Defaults include USDC and USDT mainnet mints so they are never burned/closed by accident.
+            Add any other mints you want to protect.
+          </span>
+        </label>
+      </details>
     </Section>
   );
 }

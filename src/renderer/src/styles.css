@@ -308,6 +308,11 @@ textarea.wallets-input {
 .dryrun-detail th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
 .row-error td { color: var(--danger); }
 
+/* ---------- Advanced details ---------- */
+.advanced { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+.advanced summary { cursor: pointer; color: var(--text-muted); font-size: 12px; user-select: none; }
+.advanced summary:hover { color: var(--text); }
+
 /* ---------- Alerts ---------- */
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
 .alert-error { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(255, 77, 79, 0.3); }

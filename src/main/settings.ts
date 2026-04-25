@@ -20,7 +20,8 @@ const PERSIST_KEYS: (keyof AppSettings)[] = [
   'closeEmptyAccounts',
   'closeNftAccounts',
   'maxConcurrentWallets',
-  'priorityFeeMicroLamports'
+  'priorityFeeMicroLamports',
+  'mintBlacklist'
 ];
 
 export function loadSettings(): AppSettings {

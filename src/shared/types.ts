@@ -7,7 +7,25 @@ export interface AppSettings {
   closeNftAccounts: boolean;
   maxConcurrentWallets: number;
   priorityFeeMicroLamports: number;
+  /**
+   * Mint addresses that must NEVER be touched, even if they appear in the
+   * wallet's token-account list. Defaults guard against accidentally
+   * closing major-stablecoin or wSOL accounts that hold value.
+   */
+  mintBlacklist: string[];
 }
+
+/**
+ * Default mint blacklist — never burn or close these mints by default.
+ *  - USDC mainnet  (EPjFW...) — Circle's USDC
+ *  - USDT mainnet  (Es9vM...) — Tether USDT
+ * wSOL is handled separately (close unwraps balance + rent into destination,
+ * which is the desired behaviour) so it is intentionally not blacklisted.
+ */
+export const DEFAULT_MINT_BLACKLIST = [
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
+];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   rpcUrl: 'https://api.mainnet-beta.solana.com',
@@ -17,7 +35,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   closeEmptyAccounts: true,
   closeNftAccounts: true,
   maxConcurrentWallets: 4,
-  priorityFeeMicroLamports: 0
+  priorityFeeMicroLamports: 0,
+  mintBlacklist: [...DEFAULT_MINT_BLACKLIST]
 };
 
 export interface ParsedWallet {

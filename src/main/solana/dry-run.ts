@@ -3,9 +3,11 @@ import type { AppSettings, DryRunReport, DryRunWalletReport } from '@shared/type
 import { getConnection } from './connection';
 import { fetchOwnedTokenAccounts } from './enumerate';
 import { buildActionsForWallet } from './instructions';
-import { planBatches } from './batch';
+import { planBatches, CU_PER_INSTRUCTION } from './batch';
 
 const FEE_PER_SIGNATURE_LAMPORTS = 5_000;
+/** Per-tx 2 signers (fee payer + owner) → 2 base fees. */
+const SIGNERS_PER_TX = 2;
 
 interface WalletInput {
   pubkey: string;
@@ -23,6 +25,8 @@ export async function generateDryRun(
 
   const walletReports: DryRunWalletReport[] = [];
 
+  const blacklist = new Set(settings.mintBlacklist ?? []);
+
   for (const w of wallets) {
     const owner = new PublicKey(w.pubkey);
     try {
@@ -32,21 +36,36 @@ export async function generateDryRun(
         destinationPubkey: destination,
         burnNonZeroBalances: settings.burnNonZeroBalances,
         closeEmptyAccounts: settings.closeEmptyAccounts,
-        closeNftAccounts: settings.closeNftAccounts
+        closeNftAccounts: settings.closeNftAccounts,
+        mintBlacklist: blacklist
       });
 
       const closeable = actions.filter((a) => !a.skipped);
       const batches = planBatches(actions);
 
       const recoveredLamports = closeable.reduce((sum, a) => sum + a.account.lamports, 0);
-      // Each batch is signed by [feePayer, ownerWallet] = 2 signatures.
-      const txCount = batches.length;
-      const feesLamports = txCount * 2 * FEE_PER_SIGNATURE_LAMPORTS;
-      // priority fee is computed at compute-unit time; included as a
-      // best-effort add-on so the GUI gives an honest preview.
+      // Each batch is signed by [feePayer, ownerWallet] = SIGNERS_PER_TX signatures.
+      const closeTxCount = batches.length;
+      // Plus one final sweep tx to move remaining native SOL.
+      const sweepTxCount = closeable.length > 0 ? 1 : 0;
+      const txCount = closeTxCount + sweepTxCount;
+      const feesLamports = txCount * SIGNERS_PER_TX * FEE_PER_SIGNATURE_LAMPORTS;
+      // Priority fee approximation: cu_price (μλ/CU) × budgeted CU / 1e6, summed over txs.
       const priorityFeeLamports =
         settings.priorityFeeMicroLamports > 0
-          ? Math.ceil((settings.priorityFeeMicroLamports * 200_000 * txCount) / 1_000_000)
+          ? batches.reduce(
+              (sum, b) =>
+                sum +
+                Math.ceil(
+                  (settings.priorityFeeMicroLamports *
+                    (b.instructions.length * CU_PER_INSTRUCTION + 5_000)) /
+                    1_000_000
+                ),
+              0
+            ) +
+            (sweepTxCount > 0
+              ? Math.ceil((settings.priorityFeeMicroLamports * 10_000) / 1_000_000)
+              : 0)
           : 0;
 
       const totalFees = feesLamports + priorityFeeLamports;

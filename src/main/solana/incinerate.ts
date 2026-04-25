@@ -1,24 +1,24 @@
 import {
-  ComputeBudgetProgram,
   Keypair,
   PublicKey,
   SystemProgram,
-  TransactionMessage,
-  VersionedTransaction,
   type Connection,
-  type TransactionInstruction
+  type VersionedTransaction
 } from '@solana/web3.js';
 import type { AppSettings, IncinerateEvent } from '@shared/types';
 import { getConnection } from './connection';
 import { fetchOwnedTokenAccounts } from './enumerate';
 import { buildActionsForWallet } from './instructions';
-import { planBatches, compileBatch } from './batch';
+import { planBatches, compileInstructions, CU_PER_INSTRUCTION } from './batch';
 
-const FEE_PER_SIGNATURE_LAMPORTS = 5_000;
 /** Buffer so the final SOL sweep doesn't fail by exactly the tx fee. */
 const SWEEP_FEE_BUFFER_LAMPORTS = 5_000;
 /** Don't bother sweeping dust below this many lamports. */
 const SWEEP_MIN_LAMPORTS = 1_000;
+/** sendTransaction retry attempts on transient errors (blockhash, rate limits). */
+const TX_SEND_MAX_ATTEMPTS = 3;
+/** Delay between retry attempts (ms). */
+const TX_RETRY_BASE_DELAY_MS = 800;
 
 export type EventEmitter = (event: IncinerateEvent) => void;
 
@@ -59,7 +59,6 @@ async function executeRun(
   const concurrency = Math.max(1, Math.min(8, settings.maxConcurrentWallets));
   let totalRecovered = 0;
 
-  // Simple worker pool: map walletKeypairs through a bounded queue.
   let cursor = 0;
   const workers = Array.from({ length: concurrency }, async () => {
     while (true) {
@@ -123,12 +122,14 @@ async function processWallet(
   emit({ type: 'wallet-started', runId, walletIndex, pubkey: owner.toBase58(), at: Date.now() });
 
   const accounts = await fetchOwnedTokenAccounts(connection, owner);
+  const blacklist = new Set(settings.mintBlacklist ?? []);
   const actions = buildActionsForWallet(accounts, {
     ownerPubkey: owner,
     destinationPubkey: destination,
     burnNonZeroBalances: settings.burnNonZeroBalances,
     closeEmptyAccounts: settings.closeEmptyAccounts,
-    closeNftAccounts: settings.closeNftAccounts
+    closeNftAccounts: settings.closeNftAccounts,
+    mintBlacklist: blacklist
   });
   const batches = planBatches(actions);
 
@@ -138,54 +139,22 @@ async function processWallet(
   for (const batch of batches) {
     if (isCancelled()) break;
 
-    const ixs = [...batch.instructions];
-    if (settings.priorityFeeMicroLamports > 0) {
-      ixs.unshift(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: settings.priorityFeeMicroLamports }));
-    }
+    const compute = batch.instructions.length * CU_PER_INSTRUCTION + 5_000;
+    const result = await sendAndConfirmWithRetry({
+      connection,
+      payer: feePayer,
+      signers: [feePayer, target],
+      instructions: batch.instructions,
+      priorityFeeMicroLamports: settings.priorityFeeMicroLamports,
+      computeUnitsHint: compute,
+      runId,
+      walletIndex,
+      emit
+    });
 
-    const compiled = await compileBatchWithIxs(connection, feePayer.publicKey, ixs);
-    compiled.tx.sign([feePayer, target]);
-
-    let signature: string | undefined;
-    try {
-      signature = await connection.sendTransaction(compiled.tx, {
-        skipPreflight: false,
-        maxRetries: 3
-      });
-      emit({
-        type: 'tx-sent',
-        runId,
-        walletIndex,
-        signature,
-        instructionsInTx: batch.instructions.length,
-        at: Date.now()
-      });
-
-      const conf = await connection.confirmTransaction(
-        {
-          signature,
-          blockhash: compiled.recentBlockhash,
-          lastValidBlockHeight: compiled.lastValidBlockHeight
-        },
-        'confirmed'
-      );
-      if (conf.value.err) {
-        throw new Error(`tx confirmed with error: ${JSON.stringify(conf.value.err)}`);
-      }
-
-      emit({ type: 'tx-confirmed', runId, walletIndex, signature, at: Date.now() });
+    if (result.ok) {
       closedAccountsForWallet += batch.covers.length;
       recoveredForWallet += batch.covers.reduce((s, c) => s + c.account.lamports, 0);
-    } catch (e) {
-      emit({
-        type: 'tx-failed',
-        runId,
-        walletIndex,
-        signature,
-        error: (e as Error).message,
-        at: Date.now()
-      });
-      // Continue with the next batch — partial progress is fine.
     }
   }
 
@@ -203,27 +172,18 @@ async function processWallet(
             toPubkey: destination,
             lamports: sweepAmount
           });
-          const compiled = await compileBatchWithIxs(connection, feePayer.publicKey, [sweepIx]);
-          compiled.tx.sign([feePayer, target]);
-          const sig = await connection.sendTransaction(compiled.tx, { skipPreflight: false, maxRetries: 3 });
-          emit({ type: 'tx-sent', runId, walletIndex, signature: sig, instructionsInTx: 1, at: Date.now() });
-          const conf = await connection.confirmTransaction(
-            { signature: sig, blockhash: compiled.recentBlockhash, lastValidBlockHeight: compiled.lastValidBlockHeight },
-            'confirmed'
-          );
-          if (!conf.value.err) {
-            emit({ type: 'tx-confirmed', runId, walletIndex, signature: sig, at: Date.now() });
-            recoveredForWallet += sweepAmount;
-          } else {
-            emit({
-              type: 'tx-failed',
-              runId,
-              walletIndex,
-              signature: sig,
-              error: `sweep tx errored: ${JSON.stringify(conf.value.err)}`,
-              at: Date.now()
-            });
-          }
+          const result = await sendAndConfirmWithRetry({
+            connection,
+            payer: feePayer,
+            signers: [feePayer, target],
+            instructions: [sweepIx],
+            priorityFeeMicroLamports: settings.priorityFeeMicroLamports,
+            computeUnitsHint: 10_000,
+            runId,
+            walletIndex,
+            emit
+          });
+          if (result.ok) recoveredForWallet += sweepAmount;
         }
       }
     } catch (e) {
@@ -250,21 +210,86 @@ async function processWallet(
   return recoveredForWallet;
 }
 
-async function compileBatchWithIxs(
-  connection: Connection,
-  payer: PublicKey,
-  instructions: TransactionInstruction[]
-): Promise<{ tx: VersionedTransaction; recentBlockhash: string; lastValidBlockHeight: number }> {
-  const latest = await connection.getLatestBlockhash('confirmed');
-  const message = new TransactionMessage({
-    payerKey: payer,
-    recentBlockhash: latest.blockhash,
-    instructions
-  }).compileToV0Message();
-  const tx = new VersionedTransaction(message);
-  return { tx, recentBlockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight };
+interface SendArgs {
+  connection: Connection;
+  payer: Keypair;
+  signers: Keypair[];
+  instructions: Parameters<typeof compileInstructions>[2];
+  priorityFeeMicroLamports: number;
+  computeUnitsHint: number;
+  runId: string;
+  walletIndex: number;
+  emit: EventEmitter;
 }
 
-// Re-export to keep batch.compileBatch callable for code that wants the
-// pre-built BatchPlan path; we only used the raw-ix path above.
-export { compileBatch } from './batch';
+async function sendAndConfirmWithRetry(args: SendArgs): Promise<{ ok: boolean; signature?: string }> {
+  let lastError = 'unknown error';
+  for (let attempt = 1; attempt <= TX_SEND_MAX_ATTEMPTS; attempt++) {
+    let signature: string | undefined;
+    try {
+      const compiled = await compileInstructions(args.connection, args.payer.publicKey, args.instructions, {
+        priorityFeeMicroLamports: args.priorityFeeMicroLamports,
+        computeUnitsHint: args.computeUnitsHint
+      });
+      compiled.tx.sign(args.signers);
+
+      signature = await sendRawTx(args.connection, compiled.tx);
+      args.emit({
+        type: 'tx-sent',
+        runId: args.runId,
+        walletIndex: args.walletIndex,
+        signature,
+        instructionsInTx: args.instructions.length,
+        at: Date.now()
+      });
+
+      const conf = await args.connection.confirmTransaction(
+        {
+          signature,
+          blockhash: compiled.recentBlockhash,
+          lastValidBlockHeight: compiled.lastValidBlockHeight
+        },
+        'confirmed'
+      );
+      if (conf.value.err) {
+        throw new Error(`confirmed with on-chain error: ${JSON.stringify(conf.value.err)}`);
+      }
+
+      args.emit({
+        type: 'tx-confirmed',
+        runId: args.runId,
+        walletIndex: args.walletIndex,
+        signature,
+        at: Date.now()
+      });
+      return { ok: true, signature };
+    } catch (e) {
+      lastError = (e as Error).message;
+      const transient =
+        /blockhash|expired|too old|rate|429|503|timeout|fetch failed/i.test(lastError);
+      args.emit({
+        type: 'tx-failed',
+        runId: args.runId,
+        walletIndex: args.walletIndex,
+        signature,
+        error: `attempt ${attempt}/${TX_SEND_MAX_ATTEMPTS}: ${lastError}`,
+        at: Date.now()
+      });
+      if (attempt === TX_SEND_MAX_ATTEMPTS || !transient) break;
+      await sleep(TX_RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
+  return { ok: false };
+}
+
+async function sendRawTx(connection: Connection, tx: VersionedTransaction): Promise<string> {
+  return connection.sendTransaction(tx, {
+    skipPreflight: false,
+    maxRetries: 5,
+    preflightCommitment: 'confirmed'
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}

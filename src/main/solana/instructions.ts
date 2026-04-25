@@ -20,6 +20,8 @@ export interface BuildOptions {
   closeEmptyAccounts: boolean;
   /** Treat NFTs (decimals=0, supply~1) the same as fungible tokens. */
   closeNftAccounts: boolean;
+  /** Mint addresses (base58) to skip entirely. */
+  mintBlacklist?: Set<string>;
 }
 
 /**
@@ -38,6 +40,10 @@ export function buildActionsForWallet(
 ): AccountActions[] {
   const out: AccountActions[] = [];
   for (const acct of accounts) {
+    if (opts.mintBlacklist && opts.mintBlacklist.has(acct.mint.toBase58())) {
+      out.push({ account: acct, instructions: [], skipped: true, skipReason: 'mint blacklisted' });
+      continue;
+    }
     if (acct.state === 'frozen') {
       out.push({ account: acct, instructions: [], skipped: true, skipReason: 'frozen' });
       continue;
