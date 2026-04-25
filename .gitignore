@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+out/
+build/
+release/
+*.tsbuildinfo
+
+# Environment & secrets — NEVER commit
+.env
+.env.*
+!.env.example
+secrets/
+keys/
+*.key
+*.pem
+wallets.txt
+wallets/*.txt
+!wallets.example.txt
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE / editor
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+.aider*
+.claude/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing / coverage
+coverage/
+.nyc_output/
+
+# Electron-builder
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.pkg
+app-builds/
+
+# Misc
+.cache/
+.parcel-cache/
+.next/
+.turbo/
+.vite/
