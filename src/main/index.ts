@@ -5,6 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { IPC } from '@shared/ipc-channels';
 import { DEFAULT_SETTINGS, type AppSettings } from '@shared/types';
 import { registerSettingsHandlers, loadSettings } from './settings';
+import { parseSecret, parseWalletsText, validatePubkey } from './wallet-parse';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -52,6 +53,7 @@ app.whenReady().then(() => {
 
   registerSettingsHandlers();
   registerWalletHandlers();
+  registerValidationHandlers();
   registerMiscHandlers();
 
   createWindow();
@@ -80,6 +82,21 @@ function registerWalletHandlers(): void {
     const filePath = result.filePaths[0];
     const text = readFileSync(filePath, 'utf-8');
     return { canceled: false, filePath, text };
+  });
+
+  ipcMain.handle(IPC.WALLETS_PARSE_TEXT, (_event, text: string) => {
+    return parseWalletsText(text);
+  });
+}
+
+function registerValidationHandlers(): void {
+  ipcMain.handle(IPC.VALIDATE_PUBKEY, (_event, value: string) => {
+    return validatePubkey(value);
+  });
+  ipcMain.handle(IPC.VALIDATE_SECRET, (_event, value: string) => {
+    const r = parseSecret(value);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    return { ok: true, pubkey: r.pubkey };
   });
 }
 
