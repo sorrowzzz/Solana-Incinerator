@@ -30,7 +30,10 @@ export async function generateDryRun(
   for (const w of wallets) {
     const owner = new PublicKey(w.pubkey);
     try {
-      const accounts = await fetchWithRetry(() => fetchOwnedTokenAccounts(connection, owner));
+      const [accounts, walletBalance] = await Promise.all([
+        fetchWithRetry(() => fetchOwnedTokenAccounts(connection, owner)),
+        fetchWithRetry(() => connection.getBalance(owner, 'confirmed'))
+      ]);
       const actions = buildActionsForWallet(accounts, {
         ownerPubkey: owner,
         destinationPubkey: destination,
@@ -43,11 +46,13 @@ export async function generateDryRun(
       const closeable = actions.filter((a) => !a.skipped);
       const batches = planBatches(actions);
 
-      const recoveredLamports = closeable.reduce((sum, a) => sum + a.account.lamports, 0);
+      const rentLamports = closeable.reduce((sum, a) => sum + a.account.lamports, 0);
+      const recoveredLamports = rentLamports + walletBalance;
       // Each batch is signed by [feePayer, ownerWallet] = SIGNERS_PER_TX signatures.
       const closeTxCount = batches.length;
-      // Plus one final sweep tx to move remaining native SOL.
-      const sweepTxCount = closeable.length > 0 ? 1 : 0;
+      // Plus one final sweep tx to move remaining native SOL — only when
+      // there is actually a balance to sweep.
+      const sweepTxCount = walletBalance >= 1 ? 1 : 0;
       const txCount = closeTxCount + sweepTxCount;
       const feesLamports = txCount * SIGNERS_PER_TX * FEE_PER_SIGNATURE_LAMPORTS;
       // Priority fee approximation: cu_price (μλ/CU) × budgeted CU / 1e6, summed over txs.
@@ -72,6 +77,9 @@ export async function generateDryRun(
       const netLamports = Math.max(0, recoveredLamports - totalFees);
 
       const notes: string[] = [];
+      if (walletBalance > 0) {
+        notes.push(`includes native SOL sweep of ${(walletBalance / 1_000_000_000).toFixed(6)} SOL`);
+      }
       const skipped = actions.filter((a) => a.skipped);
       if (skipped.length > 0) {
         const counts: Record<string, number> = {};

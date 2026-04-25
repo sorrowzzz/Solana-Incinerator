@@ -11,10 +11,14 @@ import { fetchOwnedTokenAccounts } from './enumerate';
 import { buildActionsForWallet } from './instructions';
 import { planBatches, compileInstructions, CU_PER_INSTRUCTION } from './batch';
 
-/** Buffer so the final SOL sweep doesn't fail by exactly the tx fee. */
-const SWEEP_FEE_BUFFER_LAMPORTS = 5_000;
-/** Don't bother sweeping dust below this many lamports. */
-const SWEEP_MIN_LAMPORTS = 1_000;
+/**
+ * Don't bother attempting a sweep if the wallet has nothing in it. The
+ * source wallet is *always* drained to exactly 0 lamports when there is
+ * a balance — the fee payer pays the tx fee, so no reserve is needed.
+ * Any non-zero residue below ~0.00089 SOL (rent-exempt minimum) would
+ * cause "insufficient funds for rent" from the Solana runtime.
+ */
+const SWEEP_MIN_LAMPORTS = 1;
 /** sendTransaction retry attempts on transient errors (blockhash, rate limits). */
 const TX_SEND_MAX_ATTEMPTS = 3;
 /** Delay between retry attempts (ms). */
@@ -164,8 +168,12 @@ async function processWallet(
   if (!isCancelled()) {
     try {
       const balance = await connection.getBalance(owner, 'confirmed');
-      if (balance > SWEEP_MIN_LAMPORTS) {
-        const sweepAmount = Math.max(0, balance - SWEEP_FEE_BUFFER_LAMPORTS);
+      if (balance >= SWEEP_MIN_LAMPORTS) {
+        // Sweep the entire balance. The fee payer pays the tx fee from a
+        // different wallet, so the source can go to exactly 0 lamports —
+        // which is the only way Solana lets a system-owned account end up
+        // below rent-exempt minimum without erroring.
+        const sweepAmount = balance;
         if (sweepAmount > 0) {
           const sweepIx = SystemProgram.transfer({
             fromPubkey: owner,
