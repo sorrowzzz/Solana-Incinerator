@@ -52,6 +52,49 @@ The Solana built-in programs involved are documented at [docs.solana.com](https:
 
 - **System Program** — for SOL transfers
 - **SPL Token Program** — for `Burn` and `CloseAccount`
+- **SPL Token-2022 Program** — same instructions, the Token-2022 fork is supported transparently
+
+### Architecture diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Solana Incinerator                        │
+│                       (Electron, local)                         │
+│                                                                 │
+│   ┌──────────────────┐        ┌────────────────────────────┐    │
+│   │   GUI (renderer) │ <--IPC│  Engine (main process)      │    │
+│   │   React + TS     │        │  • parses wallets.txt      │    │
+│   └──────────────────┘        │  • enumerates token acct   │    │
+│                                │  • builds Burn + Close ix  │    │
+│                                │  • signs v0 versioned txs  │    │
+│                                │  • streams progress events │    │
+│                                └──────────┬─────────────────┘    │
+└────────────────────────────────────────────┼────────────────────┘
+                                              │ JSON-RPC
+                                              ▼
+                                  ┌────────────────────────────┐
+                                  │  Solana RPC endpoint       │
+                                  │  (mainnet-beta or custom)  │
+                                  └────────────────────────────┘
+```
+
+Per-wallet pipeline:
+
+```
+fetch token accounts ──► build per-account actions ──► pack into v0 txs
+                                                              │
+                                       sign [feePayer, target]│
+                                                              ▼
+                                                  send + confirm ──► repeat
+                                                              │
+                                          all closes done? ◄──┘
+                                                  │
+                                                  ▼
+                                  sweep remaining native SOL
+                                  to destination (paid by feePayer)
+```
+
+Recovered SOL flows directly into the destination address with each `CloseAccount` instruction — there is no intermediate hop through any other wallet.
 
 ## Installation
 
@@ -98,13 +141,17 @@ This app holds private keys in memory while it runs. **Read this before pasting 
 ## Roadmap
 
 - [x] Foundation: license, docs, contribution policy
-- [ ] Electron + TypeScript scaffold
-- [ ] Wallet-file parsing (base58 + JSON byte-array)
-- [ ] Token-account enumeration via RPC
-- [ ] Burn + close instruction builder with batching
-- [ ] Dry-run preview engine
-- [ ] GUI: settings, file loader, progress dashboard
-- [ ] First preview release: `v0.1.0-preview`
+- [x] Electron + TypeScript scaffold
+- [x] Wallet-file parsing (base58 + JSON byte-array)
+- [x] Token-account enumeration via RPC (classic SPL + Token-2022)
+- [x] Burn + close instruction builder with batching
+- [x] Dry-run preview engine
+- [x] GUI: settings, file loader, progress dashboard
+- [x] First preview release: `v0.1.0-preview`
+- [ ] CI / typecheck workflow
+- [ ] Code-signed macOS builds
+- [ ] Address Lookup Table support to push more closes per tx
+- [ ] Per-wallet retry / resume on partial failure
 - [ ] Stable: `v1.0.0`
 
 ## Contributing
