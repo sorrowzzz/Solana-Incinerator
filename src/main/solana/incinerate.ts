@@ -56,7 +56,7 @@ async function executeRun(
   isCancelled: () => boolean
 ): Promise<{ totalRecoveredLamports: number; cancelled: boolean }> {
   const { walletKeypairs, feePayer, destination, settings } = input;
-  const connection = getConnection(settings.rpcUrl);
+  const connection = getConnection(settings.rpcUrl, settings.rpcRequestsPerSecond);
 
   emit({ type: 'run-started', runId, walletCount: walletKeypairs.length, at: Date.now() });
 

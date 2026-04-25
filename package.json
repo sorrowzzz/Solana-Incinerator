@@ -1,6 +1,6 @@
 {
   "name": "solana-incinerator",
-  "version": "0.1.1-preview.0",
+  "version": "1.0.0",
   "description": "Cross-platform desktop app for bulk-incinerating Solana wallets — burn dust tokens, close empty token accounts, and reclaim locked SOL.",
   "main": "out/main/index.js",
   "author": {

@@ -42,7 +42,7 @@ export function App(): JSX.Element {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true" />
+          <img src="/solana-logo.png" className="brand-mark" alt="Solana" />
           <div className="brand-text">
             <h1>Solana Incinerator</h1>
             <p>Bulk burn dust, close empty token accounts, reclaim locked SOL.</p>

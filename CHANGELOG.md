@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] — 2026-04-25
+
+### First stable release
+
+End-to-end validated against real mainnet wallets. Closes token accounts,
+sweeps native SOL, and routes everything to a user-chosen destination
+without the source-wallet getting stuck below rent-exempt minimum.
+
+### Added
+
+- **RPC rate limiter** (`AppSettings.rpcRequestsPerSecond`, default 8) —
+  module-level interval-gate that serialises outbound JSON-RPC calls so
+  we never blow past Helius free-tier's 10-RPS cap. All hot connection
+  methods (`getParsedTokenAccountsByOwner`, `getBalance`,
+  `getLatestBlockhash`, `sendTransaction`, `confirmTransaction`,
+  `simulateTransaction`, `getSignatureStatuses`) are patched at
+  Connection-construction time so call sites stay clean.
+- **Native SOL sweep** is now full-balance (no fee buffer subtracted).
+  The fee payer pays the tx fee from a separate wallet, so the source
+  drains to exactly 0 lamports — the only state Solana lets a system
+  account fall below rent-exempt without erroring.
+- **Honest dry-run preview**: per-wallet estimate now fetches the wallet's
+  native SOL balance and includes it in `recoveredLamports` alongside
+  rent reclaimed from closes; per-wallet note surfaces the contribution.
+- **Real Solana brand mark** (PNG) in the app header, replacing the
+  placeholder gradient square.
+- **bs58 ESM/CJS interop** fix in the parser (Phantom keys were rejected
+  as invalid in Electron's main process due to the v6 ESM-only package
+  not interop'ing through `require()`). Downgraded bs58 to 5.x and
+  added defensive default-export handling.
+- **Better error reporting**: validation badges in the GUI now show the
+  actual rejection reason (was: just `INVALID`); the dry-run engine
+  classifies RPC errors and points at the right fix (Helius, etc).
+
+### Fixed
+
+- Sweep tx no longer fails with `Transaction results in an account (1)
+  with insufficient funds for rent`.
+- Validation no longer silently mis-classifies all parser errors as
+  "invalid base58" — the underlying error message is preserved.
+
 ## [0.1.1-preview.0] — 2026-04-25
 
 ### Production-readiness improvements

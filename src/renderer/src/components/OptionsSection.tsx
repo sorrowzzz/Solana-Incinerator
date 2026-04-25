@@ -57,6 +57,22 @@ export function OptionsSection({ settings, patch }: Props): JSX.Element {
           />
           <span className="field-hint">0 disables. Try 1000–10000 during congestion.</span>
         </label>
+        <label className="field">
+          <span className="field-label">RPC requests / sec</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={settings.rpcRequestsPerSecond}
+            onChange={(e) =>
+              patch({ rpcRequestsPerSecond: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })
+            }
+          />
+          <span className="field-hint">
+            Hard cap on outbound RPC calls per second. 8 is safe for Helius free tier (10 RPS limit).
+            Raise on paid tiers; set 0 to disable.
+          </span>
+        </label>
       </div>
 
       <details className="advanced">

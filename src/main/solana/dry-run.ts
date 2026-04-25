@@ -20,7 +20,7 @@ export async function generateDryRun(
   settings: AppSettings,
   feePayerPubkey: PublicKey
 ): Promise<DryRunReport> {
-  const connection = getConnection(settings.rpcUrl);
+  const connection = getConnection(settings.rpcUrl, settings.rpcRequestsPerSecond);
   const destination = new PublicKey(settings.destinationAddress);
 
   const walletReports: DryRunWalletReport[] = [];

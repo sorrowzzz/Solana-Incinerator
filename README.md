@@ -5,7 +5,8 @@
 **A cross-platform desktop application for bulk-incinerating Solana wallets — burn dust tokens, close empty token accounts, and reclaim locked SOL rent across many wallets at once.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](./LICENSE)
-[![Status](https://img.shields.io/badge/status-preview-orange.svg?style=flat-square)](#)
+[![Status](https://img.shields.io/badge/status-stable-brightgreen.svg?style=flat-square)](#)
+[![Release](https://img.shields.io/github/v/release/sorrowzzz/Solana-Incinerator?style=flat-square)](https://github.com/sorrowzzz/Solana-Incinerator/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg?style=flat-square)](#)
 [![Electron](https://img.shields.io/badge/Electron-2B2E3A?style=flat-square&logo=electron&logoColor=9FEAF9)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -119,13 +120,76 @@ npm run build:linux   # Linux .AppImage / .deb
 
 ## Usage
 
-1. **Launch** the app.
-2. **Configure RPC** — leave the default (`https://api.mainnet-beta.solana.com`) or paste your Helius / Triton / custom endpoint.
-3. **Set destination** — paste the Solana address that should receive all recovered SOL.
-4. **Set fee payer** — paste the private key of a wallet funded with a small amount of SOL (~0.05 SOL is plenty for ~100 wallets) that will pay transaction fees for the whole run.
-5. **Load target wallets** — drag-and-drop or browse to a `.txt` file containing one private key per line (Phantom-style base58 or `solana-keygen` JSON byte arrays — both are accepted). See [`wallets.example.txt`](./wallets.example.txt).
-6. **Dry-run first** — preview what the run will do, how many accounts will be closed, and how much SOL is expected to be recovered. Nothing is broadcast.
-7. **Incinerate** — confirm in the modal, then watch progress per-wallet. Transaction signatures are linked to Solscan as they confirm.
+This is a step-by-step walkthrough. Read it in full before your first real run.
+
+### Prerequisites — set these up once, before pasting any keys
+
+1. **A Helius RPC URL** (free tier is fine). The public Solana mainnet RPC heavily rate-limits the bulk-token-account calls this app makes — you will get `fetch failed` errors on it.
+   - Sign up at <https://helius.dev>
+   - Copy your dedicated mainnet URL — looks like `https://mainnet.helius-rpc.com/?api-key=<your-key>`
+   - Treat that URL like a password. Don't commit it, paste it into chats, or share it.
+
+2. **A "fee-payer" wallet.** This is a *small* wallet whose only job is to pay transaction fees for the entire run. Create a fresh Phantom wallet (or `solana-keygen new`), fund it with **~0.05 SOL** (enough for ~100 target wallets), and export its private key.
+   - **Never** use a wallet that holds significant funds as the fee payer.
+
+3. **A "destination" address.** The Solana address that will receive every SOL the app recovers. Use a fresh wallet you control — *not* the fee payer, *not* your main holdings. Once you trust the run, you can sweep funds to your main wallet manually.
+
+4. **A `wallets.txt` file.** One private key per line, for each wallet you want to incinerate. Both formats accepted:
+   - Phantom export (base58, ~88 chars)
+   - `solana-keygen` JSON byte array `[12, 34, ..., 255]`
+
+   Lines starting with `#` are comments; blank lines are ignored. See [`wallets.example.txt`](./wallets.example.txt) for the format. Save the file *outside* the repo directory — it contains every key, treat it like a vault.
+
+### Running the app
+
+```bash
+git clone https://github.com/sorrowzzz/Solana-Incinerator.git
+cd Solana-Incinerator
+npm install
+npm run dev
+```
+
+A window titled *Solana Incinerator* opens. Walk through the five sections in order:
+
+#### Section 1 — Configuration
+- **RPC URL** → paste the Helius URL from prerequisite 1.
+- **Destination address** → paste from prerequisite 3. Wait for the green `VALID` badge.
+- **Fee payer secret** → paste from prerequisite 2. Wait for the green `VALID` badge; the derived pubkey is shown beneath the field — verify it matches the wallet you funded.
+
+#### Section 2 — Target wallets
+Click **Browse for wallets.txt** or paste the file contents directly into the textarea. The list parses live — fix any per-line errors before continuing.
+
+#### Section 3 — Options
+Defaults are sensible. Change only if you know what you want.
+- **Burn non-zero balances** — required for closing accounts that still hold dust.
+- **Close empty accounts** — reclaim ~0.002 SOL of rent per account.
+- **Close NFT accounts** — treat NFTs as ordinary SPL tokens.
+- **Concurrent wallets** — 4. Drop to 2 on a slow RPC.
+- **Priority fee** — 0. Bump to 1000–10000 during mainnet congestion.
+- **RPC requests / second** — 8. Safe for Helius free tier (10 RPS limit). Raise on paid tiers.
+- **Advanced → mint blacklist** — pre-loaded with USDC and USDT mainnet mints. Add any other mints you want to protect.
+
+#### Section 4 — Dry Run
+Click **Dry Run**. *Nothing is broadcast.* The app fetches every wallet's token accounts and the wallet's native SOL balance, then reports:
+- *Closeable accounts* — total count
+- *Estimated recovered* — total SOL you'll receive (rent + native sweep)
+- *Estimated fees* — paid by the fee-payer wallet
+- *Net recovery* — what actually lands at the destination
+
+Expand **Per-wallet breakdown** to see each wallet's numbers, including a `includes native SOL sweep of N SOL` note when applicable. If any wallet shows an error, **stop and investigate** before broadcasting.
+
+#### Section 5 — Incinerate
+After a clean dry-run that matches what you expect:
+1. Click **Incinerate**.
+2. Verify *every line* in the confirmation modal — wallets, accounts, net recovery, destination, fee payer, RPC.
+3. Click **Yes, incinerate**.
+
+The progress log streams every event live with clickable Solscan links. Use **Cancel run** to stop mid-flight (already-confirmed txs are not reversible — that's just Solana, not the app).
+
+### After the run
+- Verify the destination wallet's balance on Solscan matches the *Recovered* total (minus a few lamports of rounding).
+- Each target wallet should now be at exactly 0 SOL — confirming the sweep worked.
+- **Delete `wallets.txt` from disk** if you're done. The app keeps nothing in memory after exit; the file is the only artefact that needs cleanup.
 
 ## Security
 
@@ -148,11 +212,12 @@ This app holds private keys in memory while it runs. **Read this before pasting 
 - [x] Dry-run preview engine
 - [x] GUI: settings, file loader, progress dashboard
 - [x] First preview release: `v0.1.0-preview`
-- [ ] CI / typecheck workflow
-- [ ] Code-signed macOS builds
+- [x] Production-readiness pass (`v0.1.1-preview`): real-network validated, batching tuned, retries, blacklist
+- [x] Stable: `v1.0.0` — RPC rate limiter, full-balance native-SOL sweep, real Solana brand mark
+- [ ] CI typecheck/test workflow
+- [ ] Code-signed & notarised macOS builds
 - [ ] Address Lookup Table support to push more closes per tx
 - [ ] Per-wallet retry / resume on partial failure
-- [ ] Stable: `v1.0.0`
 
 ## Contributing
 

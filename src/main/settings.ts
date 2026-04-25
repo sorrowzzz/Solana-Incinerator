@@ -21,7 +21,8 @@ const PERSIST_KEYS: (keyof AppSettings)[] = [
   'closeNftAccounts',
   'maxConcurrentWallets',
   'priorityFeeMicroLamports',
-  'mintBlacklist'
+  'mintBlacklist',
+  'rpcRequestsPerSecond'
 ];
 
 export function loadSettings(): AppSettings {
