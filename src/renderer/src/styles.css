@@ -313,6 +313,9 @@ textarea.wallets-input {
 .advanced summary { cursor: pointer; color: var(--text-muted); font-size: 12px; user-select: none; }
 .advanced summary:hover { color: var(--text); }
 
+.hint-error { color: var(--danger); font-weight: 600; }
+.hint-tip { color: var(--text); }
+
 /* ---------- Alerts ---------- */
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
 .alert-error { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(255, 77, 79, 0.3); }

@@ -78,6 +78,12 @@ export function ConfigSection({ settings, patch }: Props): JSX.Element {
           <span className="field-hint">
             All rent reclaimed from CloseAccount goes <em>directly</em> here — no intermediate hop.
             Triple-check this address.
+            {destStatus && !destStatus.ok && destStatus.reason && (
+              <>
+                {' '}
+                <span className="hint-error">Error: {destStatus.reason}</span>
+              </>
+            )}
           </span>
         </label>
 
@@ -106,6 +112,17 @@ export function ConfigSection({ settings, patch }: Props): JSX.Element {
           <span className="field-hint">
             One small wallet pays fees for the entire run. Funded with ~0.05 SOL is plenty for ~100
             wallets. <strong>Never</strong> use a wallet holding significant funds.
+            {feeStatus && !feeStatus.ok && feeStatus.reason && (
+              <>
+                {' '}
+                <span className="hint-error">Error: {feeStatus.reason}</span>
+                {' '}
+                <span className="hint-tip">
+                  (Phantom: Settings → Privacy &amp; security → Show private key — paste the long
+                  base58 string; not the recovery phrase.)
+                </span>
+              </>
+            )}
             {feeStatus?.ok && feeStatus.pubkey && (
               <>
                 {' '}

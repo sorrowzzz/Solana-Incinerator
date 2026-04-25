@@ -19,13 +19,28 @@ export interface ParseSecretResult {
  * error so callers can distinguish "blank line" upstream.
  */
 export function parseSecret(rawInput: string): ParseSecretResult {
-  const stripped = stripInlineComment(rawInput).trim();
-  if (stripped.length === 0) return { ok: false, reason: 'empty' };
+  // Strip surrounding whitespace including unicode whitespace and zero-width
+  // characters that some clipboards inject during paste.
+  const cleaned = stripInlineComment(rawInput)
+    .replace(/[​-‏﻿]/g, '')
+    .trim();
+  if (cleaned.length === 0) return { ok: false, reason: 'empty input' };
 
-  if (stripped.startsWith('[')) {
-    return parseJsonArraySecret(stripped);
+  if (cleaned.startsWith('[')) {
+    return parseJsonArraySecret(cleaned);
   }
-  return parseBase58Secret(stripped);
+  // Detect a likely seed phrase (multiple words separated by spaces).
+  if (/\s/.test(cleaned)) {
+    const words = cleaned.split(/\s+/);
+    if (words.length === 12 || words.length === 24) {
+      return {
+        ok: false,
+        reason: `looks like a ${words.length}-word recovery phrase. Paste the Phantom Private Key (a single long base58 string), not the recovery phrase.`
+      };
+    }
+    return { ok: false, reason: 'whitespace inside key — paste a single base58 string with no spaces' };
+  }
+  return parseBase58Secret(cleaned);
 }
 
 function parseBase58Secret(value: string): ParseSecretResult {
@@ -33,10 +48,19 @@ function parseBase58Secret(value: string): ParseSecretResult {
   try {
     bytes = bs58.decode(value);
   } catch {
-    return { ok: false, reason: 'invalid base58' };
+    return {
+      ok: false,
+      reason: 'string is not valid base58 — Phantom keys are 87–88 chars from this alphabet: 1-9, A-H, J-N, P-Z, a-k, m-z'
+    };
+  }
+  if (bytes.length === 32) {
+    return {
+      ok: false,
+      reason: 'this is a 32-byte seed, not a 64-byte expanded secret. Phantom export is 64 bytes (~88 base58 chars). Make sure you copied the full Private Key.'
+    };
   }
   if (bytes.length !== 64) {
-    return { ok: false, reason: `expected 64-byte secret, got ${bytes.length}` };
+    return { ok: false, reason: `expected 64-byte secret, got ${bytes.length} bytes (${value.length} base58 chars)` };
   }
   try {
     const kp = Keypair.fromSecretKey(bytes);
