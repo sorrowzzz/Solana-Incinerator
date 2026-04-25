@@ -1,6 +1,15 @@
 import { Keypair, PublicKey } from '@solana/web3.js';
-import bs58 from 'bs58';
+import * as bs58Module from 'bs58';
 import type { ParsedWallet } from '@shared/types';
+
+// Defensive interop: bs58 v5 is dual ESM/CJS, but some bundlers wrap the
+// default export in `{ default: ... }`. Prefer the namespace's `decode`
+// when present, otherwise fall back to `.default.decode`.
+interface Bs58Like { decode(s: string): Uint8Array; encode(b: Uint8Array): string }
+const bs58: Bs58Like =
+  typeof (bs58Module as unknown as Bs58Like).decode === 'function'
+    ? (bs58Module as unknown as Bs58Like)
+    : ((bs58Module as unknown as { default: Bs58Like }).default);
 
 export interface ParseSecretResult {
   ok: boolean;
@@ -47,10 +56,10 @@ function parseBase58Secret(value: string): ParseSecretResult {
   let bytes: Uint8Array;
   try {
     bytes = bs58.decode(value);
-  } catch {
+  } catch (e) {
     return {
       ok: false,
-      reason: 'string is not valid base58 — Phantom keys are 87–88 chars from this alphabet: 1-9, A-H, J-N, P-Z, a-k, m-z'
+      reason: `base58 decode failed: ${(e as Error).message}`
     };
   }
   if (bytes.length === 32) {

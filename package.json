@@ -40,7 +40,7 @@
   "dependencies": {
     "@solana/spl-token": "^0.4.8",
     "@solana/web3.js": "^1.95.3",
-    "bs58": "^6.0.0"
+    "bs58": "^5.0.0"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
