@@ -1,0 +1,65 @@
+{
+  "name": "solana-incinerator",
+  "version": "0.1.0-preview.0",
+  "description": "Cross-platform desktop app for bulk-incinerating Solana wallets — burn dust tokens, close empty token accounts, and reclaim locked SOL.",
+  "main": "out/main/index.js",
+  "author": {
+    "name": "sorrowz",
+    "url": "https://github.com/sorrowzzz"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/sorrowzzz/Solana-Incinerator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sorrowzzz/Solana-Incinerator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sorrowzzz/Solana-Incinerator/issues"
+  },
+  "keywords": [
+    "solana",
+    "incinerator",
+    "spl-token",
+    "burn",
+    "close-account",
+    "rent-recovery",
+    "electron",
+    "desktop"
+  ],
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint . --ext .ts,.tsx",
+    "preview": "electron-vite preview",
+    "build:mac": "npm run build && electron-builder --mac --config electron-builder.yml",
+    "build:win": "npm run build && electron-builder --win --config electron-builder.yml",
+    "build:linux": "npm run build && electron-builder --linux --config electron-builder.yml",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.8",
+    "@solana/web3.js": "^1.95.3",
+    "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.2.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3",
+    "vitest": "^2.0.2"
+  }
+}

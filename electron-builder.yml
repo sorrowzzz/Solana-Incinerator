@@ -1,0 +1,44 @@
+appId: com.sorrowz.solana-incinerator
+productName: Solana Incinerator
+copyright: Copyright (c) 2026 sorrowz
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - LICENSE
+asarUnpack:
+  - resources/**
+mac:
+  category: public.app-category.utilities
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDir: true
+  perMachine: false
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb
+  maintainer: sorrowz
+publish:
+  - provider: github
+    owner: sorrowzzz
+    repo: Solana-Incinerator
