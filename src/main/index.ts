@@ -2,10 +2,13 @@ import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
+import { PublicKey } from '@solana/web3.js';
 import { IPC } from '@shared/ipc-channels';
-import { DEFAULT_SETTINGS, type AppSettings } from '@shared/types';
+import { DEFAULT_SETTINGS, type AppSettings, type IncinerateEvent, type RunRequest } from '@shared/types';
 import { registerSettingsHandlers, loadSettings } from './settings';
-import { parseSecret, parseWalletsText, validatePubkey } from './wallet-parse';
+import { parseSecret, parseWalletsText, parseWalletsTextWithKeys, validatePubkey } from './wallet-parse';
+import { generateDryRun } from './solana/dry-run';
+import { startRun, type RunHandle } from './solana/incinerate';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -54,6 +57,7 @@ app.whenReady().then(() => {
   registerSettingsHandlers();
   registerWalletHandlers();
   registerValidationHandlers();
+  registerIncinerateHandlers();
   registerMiscHandlers();
 
   createWindow();
@@ -107,6 +111,64 @@ function registerMiscHandlers(): void {
     return true;
   });
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion());
+}
+
+const activeRuns = new Map<string, RunHandle>();
+
+function emitIncinerateEvent(event: IncinerateEvent): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(IPC.INCINERATE_EVENT, event);
+}
+
+function registerIncinerateHandlers(): void {
+  ipcMain.handle(IPC.INCINERATE_DRY_RUN, async (_event, req: RunRequest) => {
+    const parsed = parseWalletsTextWithKeys(req.walletSecrets.join('\n'));
+    const ok = parsed.filter((w) => w.ok && w.keypair);
+    const feePayerParsed = parseSecret(req.settings.feePayerSecret);
+    if (!feePayerParsed.ok || !feePayerParsed.keypair) {
+      throw new Error(`fee payer secret is invalid: ${feePayerParsed.reason}`);
+    }
+    const destinationCheck = validatePubkey(req.settings.destinationAddress);
+    if (!destinationCheck.ok) {
+      throw new Error(`destination address is invalid: ${destinationCheck.reason}`);
+    }
+    return generateDryRun(
+      ok.map((w) => ({ pubkey: w.pubkey })),
+      req.settings,
+      feePayerParsed.keypair.publicKey
+    );
+  });
+
+  ipcMain.handle(IPC.INCINERATE_RUN, async (_event, req: RunRequest) => {
+    const parsed = parseWalletsTextWithKeys(req.walletSecrets.join('\n'));
+    const ok = parsed.filter((w) => w.ok && w.keypair);
+    const feePayerParsed = parseSecret(req.settings.feePayerSecret);
+    if (!feePayerParsed.ok || !feePayerParsed.keypair) {
+      throw new Error(`fee payer secret is invalid: ${feePayerParsed.reason}`);
+    }
+    const destinationCheck = validatePubkey(req.settings.destinationAddress);
+    if (!destinationCheck.ok) {
+      throw new Error(`destination address is invalid: ${destinationCheck.reason}`);
+    }
+
+    const handle = startRun(
+      {
+        walletKeypairs: ok.map((w) => w.keypair!),
+        feePayer: feePayerParsed.keypair,
+        destination: new PublicKey(req.settings.destinationAddress),
+        settings: req.settings
+      },
+      emitIncinerateEvent
+    );
+    activeRuns.set(handle.runId, handle);
+    void handle.promise.finally(() => activeRuns.delete(handle.runId));
+    return { runId: handle.runId };
+  });
+
+  ipcMain.handle(IPC.INCINERATE_CANCEL, (_event, runId: string) => {
+    const h = activeRuns.get(runId);
+    if (h) h.cancel();
+  });
 }
 
 // Re-export for type-checker convenience
