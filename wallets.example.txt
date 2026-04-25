@@ -1,0 +1,35 @@
+# =============================================================================
+# Solana Incinerator — example wallets file
+# =============================================================================
+#
+# Replace the placeholder values below with your own private keys, save the
+# file as `wallets.txt` (or any other name), and load it from the app.
+#
+# Format rules:
+#   * One private key per line.
+#   * Two formats are accepted on the same line:
+#       (a) Base58 string (Phantom export), ~88 characters.
+#       (b) JSON byte array of 64 numbers, e.g. [12,34,...,255]
+#         (the format `solana-keygen` writes by default).
+#   * Lines starting with `#` are treated as comments.
+#   * Blank lines are ignored.
+#   * An inline `# label` is allowed AFTER a base58 key for readability.
+#
+# Security:
+#   * Never share this file. It is the equivalent of giving someone the
+#     keys to all of these wallets.
+#   * Delete it from disk after the run, or store it on an encrypted volume.
+#   * The app does not write your keys to disk. They live only in memory
+#     for the duration of the run.
+#
+# Note: the placeholder strings below are intentionally NOT valid keys.
+#       The parser will reject them. This file exists to document the
+#       format only — replace each line with a real key before using.
+# =============================================================================
+
+# --- Example: Phantom-style base58 export ---
+PHANTOM_BASE58_PRIVATE_KEY_GOES_HERE_REPLACE_THIS_LINE_WITH_YOUR_OWN_KEY   # main wallet
+ANOTHER_BASE58_PRIVATE_KEY_GOES_HERE_REPLACE_THIS_LINE_WITH_YOUR_OWN_KEY   # secondary
+
+# --- Example: solana-keygen JSON byte array ---
+# [12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78,90,12,34,56,78]
