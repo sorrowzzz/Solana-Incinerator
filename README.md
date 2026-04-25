@@ -99,24 +99,59 @@ Recovered SOL flows directly into the destination address with each `CloseAccoun
 
 ## Installation
 
-### From source (current method during preview)
+The recommended way to run the app is **from source** — it's three commands and gives you the exact same binary the release builds. Pre-built `.dmg` artefacts are attached to the [latest release](https://github.com/sorrowzzz/Solana-Incinerator/releases) when network conditions allow upload (the Apple Silicon build is usually present; the Intel x64 build sometimes isn't due to GitHub upload-endpoint issues from the publishing machine — build it yourself with `npm run build:mac` if you need it).
 
-> Pre-built binaries will be published under [Releases](https://github.com/sorrowzzz/Solana-Incinerator/releases) once the app reaches a stable preview milestone.
+### Prerequisites
+
+- **Node.js 20 or newer.** Check with `node -v`. If you don't have it: install via [nvm](https://github.com/nvm-sh/nvm) (`nvm install 20`) or download from [nodejs.org](https://nodejs.org).
+- **git.** Already on macOS (run `xcode-select --install` if missing).
+
+### Run from source (macOS / Linux / Windows)
+
+Open a terminal:
 
 ```bash
+# 1. Clone the repo to anywhere convenient
 git clone https://github.com/sorrowzzz/Solana-Incinerator.git
 cd Solana-Incinerator
+
+# 2. Install dependencies (~30s, downloads ~600 npm packages)
 npm install
+
+# 3. Launch the app
 npm run dev
 ```
 
-Build a packaged app for your OS:
+A window titled **Solana Incinerator** opens. Leave the terminal running — `Ctrl+C` in the terminal kills the app. To re-launch later, just `cd Solana-Incinerator && npm run dev` again — you don't need to re-clone or re-install.
+
+### Build a packaged app for distribution
 
 ```bash
-npm run build:mac     # macOS .dmg
-npm run build:win     # Windows .exe
-npm run build:linux   # Linux .AppImage / .deb
+npm run build:mac     # macOS .dmg in release/<version>/
+npm run build:win     # Windows .exe (NSIS installer)
+npm run build:linux   # Linux .AppImage and .deb
 ```
+
+The `.dmg` is unsigned. macOS Gatekeeper blocks it on first open — right-click the app inside the `.dmg` → *Open* → click *Open* in the dialog. macOS remembers the choice for that copy.
+
+### Updating to a new version
+
+```bash
+cd Solana-Incinerator
+git pull
+npm install   # only needed if package-lock.json changed
+npm run dev
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `npm install` errors out | Make sure `node -v` reports 20.x or higher. Delete `node_modules/` and `package-lock.json`, then re-run. |
+| App window opens to a blank screen | Quit the app (`Ctrl+C`), then re-run `npm run dev`. The renderer dev server sometimes needs a clean start. |
+| `fetch failed` on dry-run | The public Solana RPC is rate-limited. Get a free Helius URL (see [Usage](#usage) below) and paste it into the RPC field. |
+| Pasting a Phantom key shows `INVALID` with a real reason | The error text below the field tells you what's wrong (recovery phrase vs private key, wrong byte length, etc.). |
+| `Transaction results in an account with insufficient funds for rent` during sweep | Update to v1.0.0 or later — that bug is fixed in the stable release. |
 
 ## Usage
 
