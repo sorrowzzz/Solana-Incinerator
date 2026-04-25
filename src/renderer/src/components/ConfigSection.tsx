@@ -55,8 +55,19 @@ export function ConfigSection({ settings, patch }: Props): JSX.Element {
             autoCapitalize="off"
           />
           <span className="field-hint">
-            Default is Solana&apos;s public mainnet. Paste a Helius / Triton / QuickNode endpoint for
-            higher throughput and rate limits.
+            <strong>Strongly recommended:</strong> paste a free Helius RPC URL (sign up at{' '}
+            <a
+              href="https://helius.dev"
+              onClick={(e) => {
+                e.preventDefault();
+                window.incineratorApi.shell.openExternal('https://helius.dev');
+              }}
+            >
+              helius.dev
+            </a>
+            ). Solana&apos;s public mainnet endpoint heavily rate-limits the bulk-token-account
+            calls this app makes, so the default URL will usually fail with &quot;fetch
+            failed&quot; / 429.
           </span>
         </label>
 

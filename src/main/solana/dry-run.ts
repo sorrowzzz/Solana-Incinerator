@@ -30,7 +30,7 @@ export async function generateDryRun(
   for (const w of wallets) {
     const owner = new PublicKey(w.pubkey);
     try {
-      const accounts = await fetchOwnedTokenAccounts(connection, owner);
+      const accounts = await fetchWithRetry(() => fetchOwnedTokenAccounts(connection, owner));
       const actions = buildActionsForWallet(accounts, {
         ownerPubkey: owner,
         destinationPubkey: destination,
@@ -101,7 +101,7 @@ export async function generateDryRun(
         estimatedNetLamports: 0,
         notes: [],
         ok: false,
-        error: (e as Error).message
+        error: classifyRpcError(e as Error)
       });
     }
   }
@@ -122,4 +122,35 @@ export async function generateDryRun(
     rpcUrl: settings.rpcUrl,
     generatedAt: Date.now()
   };
+}
+
+async function fetchWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: Error | undefined;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e as Error;
+      const transient = /fetch failed|429|503|timeout|rate|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i.test(
+        lastError.message
+      );
+      if (i === attempts || !transient) throw lastError;
+      await new Promise((r) => setTimeout(r, 600 * i));
+    }
+  }
+  throw lastError;
+}
+
+function classifyRpcError(e: Error): string {
+  const msg = e.message || String(e);
+  if (/fetch failed|ECONNRESET|ENOTFOUND|EAI_AGAIN/i.test(msg)) {
+    return `RPC unreachable. The public mainnet endpoint heavily rate-limits getParsedTokenAccountsByOwner — sign up for a free Helius RPC at https://helius.dev and paste the URL into RPC URL. (raw: ${msg})`;
+  }
+  if (/429|rate/i.test(msg)) {
+    return `RPC rate-limited (HTTP 429). Switch to Helius/Triton/QuickNode. (raw: ${msg})`;
+  }
+  if (/403|Forbidden/i.test(msg)) {
+    return `RPC refused the request (HTTP 403) — public mainnet often blocks getParsedTokenAccountsByOwner. Use a Helius RPC URL. (raw: ${msg})`;
+  }
+  return msg;
 }
