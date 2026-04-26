@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-04-25
+
+### Fixed: rate-limit storm on dry-runs over many wallets
+
+A user reported the terminal flooding with `Server responded with 429
+Too Many Requests. Retrying after 500ms delay...` when dry-running 100+
+wallets, even with the RpcGate active.
+
+Root cause: `@solana/web3.js` does its **own** retry-on-429 loop *inside*
+each `connection.*` method, **before** returning to the caller. My gate
+only delays the first call — the 4 internal retries 500ms apart all
+went out ungated, multiplying load by 5x and producing the storm. The
+work eventually succeeded, but slowly and noisily.
+
+Fix:
+- `disableRetryOnRateLimit: true` on the Connection — web3.js's internal
+  retry is disabled. Our outer retry paths (`fetchWithRetry` in dry-run,
+  `sendAndConfirmWithRetry` in the runner) re-invoke the patched method,
+  so each retry **does** go through the gate.
+- Default `rpcRequestsPerSecond` lowered 8 → 5. Helius free tier is
+  10 credits/sec and the bulk `getParsedTokenAccountsByOwner` we hit
+  most is heavy; 5 RPS leaves room for the occasional simulate /
+  getBalance burst without hitting the credit ceiling.
+- Outer retry attempts bumped 3 → 5 with **exponential** back-off
+  (800ms, 1.6s, 3.2s, 6.4s, 12.8s) so a Helius credit-refill window has
+  time to recover.
+- "too many" added to the transient-error pattern so we recognise
+  Helius's text-mode rate-limit messages alongside the numeric `429`.
+
 ## [1.0.0] — 2026-04-25
 
 ### First stable release

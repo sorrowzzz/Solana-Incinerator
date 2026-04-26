@@ -132,18 +132,20 @@ export async function generateDryRun(
   };
 }
 
-async function fetchWithRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+async function fetchWithRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: Error | undefined;
   for (let i = 1; i <= attempts; i++) {
     try {
       return await fn();
     } catch (e) {
       lastError = e as Error;
-      const transient = /fetch failed|429|503|timeout|rate|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i.test(
+      const transient = /fetch failed|429|too many|503|timeout|rate|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i.test(
         lastError.message
       );
       if (i === attempts || !transient) throw lastError;
-      await new Promise((r) => setTimeout(r, 600 * i));
+      // Exponential back-off: 800ms, 1.6s, 3.2s, 6.4s. Combined with the
+      // RpcGate this is enough to weather a Helius credit refill window.
+      await new Promise((r) => setTimeout(r, 800 * Math.pow(2, i - 1)));
     }
   }
   throw lastError;

@@ -15,7 +15,9 @@ export interface AppSettings {
   mintBlacklist: string[];
   /**
    * Hard ceiling on outbound JSON-RPC calls per second. Helius free tier
-   * is ~10 RPS; default 8 leaves headroom. Set to 0 to disable.
+   * is ~10 RPS *credits* (each method is weighted differently — the bulk
+   * `getParsedTokenAccountsByOwner` we use most is 10 credits per call).
+   * Default 5 RPS leaves headroom. Set to 0 to disable.
    */
   rpcRequestsPerSecond: number;
 }
@@ -42,7 +44,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentWallets: 4,
   priorityFeeMicroLamports: 0,
   mintBlacklist: [...DEFAULT_MINT_BLACKLIST],
-  rpcRequestsPerSecond: 8
+  rpcRequestsPerSecond: 5
 };
 
 export interface ParsedWallet {

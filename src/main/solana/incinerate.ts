@@ -20,8 +20,8 @@ import { planBatches, compileInstructions, CU_PER_INSTRUCTION } from './batch';
  */
 const SWEEP_MIN_LAMPORTS = 1;
 /** sendTransaction retry attempts on transient errors (blockhash, rate limits). */
-const TX_SEND_MAX_ATTEMPTS = 3;
-/** Delay between retry attempts (ms). */
+const TX_SEND_MAX_ATTEMPTS = 5;
+/** Base delay between retry attempts (ms); applied as exponential back-off. */
 const TX_RETRY_BASE_DELAY_MS = 800;
 
 export type EventEmitter = (event: IncinerateEvent) => void;
@@ -274,7 +274,7 @@ async function sendAndConfirmWithRetry(args: SendArgs): Promise<{ ok: boolean; s
     } catch (e) {
       lastError = (e as Error).message;
       const transient =
-        /blockhash|expired|too old|rate|429|503|timeout|fetch failed/i.test(lastError);
+        /blockhash|expired|too old|rate|too many|429|503|timeout|fetch failed/i.test(lastError);
       args.emit({
         type: 'tx-failed',
         runId: args.runId,
@@ -284,7 +284,8 @@ async function sendAndConfirmWithRetry(args: SendArgs): Promise<{ ok: boolean; s
         at: Date.now()
       });
       if (attempt === TX_SEND_MAX_ATTEMPTS || !transient) break;
-      await sleep(TX_RETRY_BASE_DELAY_MS * attempt);
+      // Exponential back-off so a Helius credit refill window has time to recover.
+      await sleep(TX_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
     }
   }
   return { ok: false };

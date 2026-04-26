@@ -13,7 +13,7 @@ const cache = new Map<string, Connection>();
  */
 export function getConnection(
   rpcUrl: string,
-  rps = 8,
+  rps = 5,
   commitment: Commitment = DEFAULT_COMMITMENT
 ): Connection {
   const key = `${rpcUrl}::${commitment}::${rps}`;
@@ -22,7 +22,13 @@ export function getConnection(
   const config: ConnectionConfig = {
     commitment,
     confirmTransactionInitialTimeout: 60_000,
-    disableRetryOnRateLimit: false
+    // Critical: web3.js's internal retry-on-429 bypasses our RpcGate. If we
+    // leave it on, a single 429 spawns 5 ungated retries 500ms apart,
+    // multiplying load by 5x and producing the rate-limit storm we see in
+    // the terminal. Our outer retry paths (fetchWithRetry in dry-run,
+    // sendAndConfirmWithRetry in the runner) re-invoke the patched method,
+    // so each retry goes through the gate.
+    disableRetryOnRateLimit: true
   };
   const conn = new Connection(rpcUrl, config);
   applyRateLimit(conn, rpcUrl, rps);
