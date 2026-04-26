@@ -69,9 +69,9 @@ export function OptionsSection({ settings, patch }: Props): JSX.Element {
             }
           />
           <span className="field-hint">
-            Hard cap on outbound RPC calls per second. 5 is safe for Helius free tier (10 credits/sec
-            cap, and the bulk token-account call we use is heavy). Lower this to 2–3 if you still
-            see 429 errors. Raise to 20+ on paid tiers; set 0 to disable.
+            Hard cap on outbound RPC calls per second. 3 is conservative for Helius free tier
+            (10 credits/sec cap, and bulk calls like getParsedTokenAccountsByOwner are heavy).
+            Raise to 20+ on paid tiers; set 0 to disable.
           </span>
         </label>
       </div>

@@ -12,6 +12,24 @@ import { startRun, type RunHandle } from './solana/incinerate';
 
 let mainWindow: BrowserWindow | null = null;
 
+/**
+ * @solana/web3.js sometimes leaks rejected promises from internal RPC
+ * polling fallbacks (especially under rate limiting). Those rejections are
+ * already handled at our boundary via fetchWithRetry / sendAndConfirmWithRetry,
+ * but the original promise still surfaces as an UnhandledPromiseRejection
+ * scary stack trace in the terminal. Catch them here and log a single line.
+ */
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  if (/429|rate|too many|fetch failed|expired|blockhash/i.test(msg)) {
+    // Quietly drop the noisy ones — the engine already handled them.
+    return;
+  }
+  // Log non-rate-limit unhandled rejections so real bugs are still visible.
+  // eslint-disable-next-line no-console
+  console.warn('[unhandledRejection]', msg);
+});
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1100,

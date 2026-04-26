@@ -23,6 +23,10 @@ const SWEEP_MIN_LAMPORTS = 1;
 const TX_SEND_MAX_ATTEMPTS = 5;
 /** Base delay between retry attempts (ms); applied as exponential back-off. */
 const TX_RETRY_BASE_DELAY_MS = 800;
+/** confirmByPoll interval (ms). 2.5s is slow enough to stay polite under rate caps. */
+const CONFIRM_POLL_INTERVAL_MS = 2_500;
+/** confirmByPoll overall timeout (ms). Comfortably longer than blockhash validity. */
+const CONFIRM_POLL_TIMEOUT_MS = 90_000;
 
 export type EventEmitter = (event: IncinerateEvent) => void;
 
@@ -251,16 +255,9 @@ async function sendAndConfirmWithRetry(args: SendArgs): Promise<{ ok: boolean; s
         at: Date.now()
       });
 
-      const conf = await args.connection.confirmTransaction(
-        {
-          signature,
-          blockhash: compiled.recentBlockhash,
-          lastValidBlockHeight: compiled.lastValidBlockHeight
-        },
-        'confirmed'
-      );
-      if (conf.value.err) {
-        throw new Error(`confirmed with on-chain error: ${JSON.stringify(conf.value.err)}`);
+      const conf = await confirmByPoll(args.connection, signature);
+      if (conf.err) {
+        throw new Error(`confirmed with on-chain error: ${JSON.stringify(conf.err)}`);
       }
 
       args.emit({
@@ -301,4 +298,45 @@ async function sendRawTx(connection: Connection, tx: VersionedTransaction): Prom
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Confirm a transaction via HTTP polling on getSignatureStatuses, instead
+ * of the WebSocket-based subscription that web3.js uses by default.
+ *
+ * Why: web3.js's confirmTransaction opens a `signatureSubscribe` WS
+ * subscription (and a separate HTTP fallback poller). Both bypass our
+ * RpcGate and produce 429 storms — visible as "ws error: Unexpected server
+ * response: 429" and unhandled JSON-RPC -32429 rejections. By rolling our
+ * own poll on getSignatureStatuses (which IS in the gate's method list),
+ * every check is throttled and serialised correctly.
+ */
+async function confirmByPoll(
+  connection: Connection,
+  signature: string,
+  timeoutMs = CONFIRM_POLL_TIMEOUT_MS,
+  pollIntervalMs = CONFIRM_POLL_INTERVAL_MS
+): Promise<{ err: unknown }> {
+  const start = Date.now();
+  let lastErr: Error | undefined;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const result = await connection.getSignatureStatuses([signature]);
+      const status = result.value[0];
+      if (status) {
+        if (status.err) return { err: status.err };
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          return { err: null };
+        }
+      }
+    } catch (e) {
+      lastErr = e as Error;
+      // Tolerate transient errors during polling — rate-limit retries on
+      // status checks just push the next poll out by one interval.
+    }
+    await sleep(pollIntervalMs);
+  }
+  throw new Error(
+    `confirm timeout after ${timeoutMs}ms${lastErr ? ` (last status error: ${lastErr.message})` : ''}`
+  );
 }

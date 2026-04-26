@@ -13,7 +13,7 @@ const cache = new Map<string, Connection>();
  */
 export function getConnection(
   rpcUrl: string,
-  rps = 5,
+  rps = 3,
   commitment: Commitment = DEFAULT_COMMITMENT
 ): Connection {
   const key = `${rpcUrl}::${commitment}::${rps}`;
@@ -28,7 +28,13 @@ export function getConnection(
     // the terminal. Our outer retry paths (fetchWithRetry in dry-run,
     // sendAndConfirmWithRetry in the runner) re-invoke the patched method,
     // so each retry goes through the gate.
-    disableRetryOnRateLimit: true
+    disableRetryOnRateLimit: true,
+    // Point the WebSocket endpoint at an unresolvable host. We do not call
+    // any subscription-based API (confirmTransaction is replaced with
+    // poll-based confirmByPoll), so the WS should never actually open.
+    // If something accidentally tries to subscribe, this fails fast and
+    // loud instead of silently degrading throughput.
+    wsEndpoint: 'wss://invalid.solana-incinerator.invalid/'
   };
   const conn = new Connection(rpcUrl, config);
   applyRateLimit(conn, rpcUrl, rps);
@@ -48,7 +54,8 @@ const RATE_LIMITED_METHODS = [
   'sendRawTransaction',
   'confirmTransaction',
   'simulateTransaction',
-  'getSignatureStatuses'
+  'getSignatureStatuses',
+  'getBlockHeight'
 ] as const;
 
 function applyRateLimit(conn: Connection, rpcUrl: string, rps: number): void {

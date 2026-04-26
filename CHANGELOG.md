@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-04-26
+
+### Fixed: rate-limit storm part 2 — kill the WebSocket entirely
+
+v1.0.1 fixed the HTTP retry-amplification problem, but a second source of
+ungated load remained: `connection.confirmTransaction()` opens a
+`signatureSubscribe` WebSocket and a separate HTTP fallback poller, both
+of which bypass our RpcGate. Visible as `ws error: Unexpected server
+response: 429` and `(node) UnhandledPromiseRejectionWarning: Error: 429`
+in the terminal during multi-wallet runs.
+
+Fix:
+- New `confirmByPoll(connection, signature)` does HTTP polling on
+  `getSignatureStatuses` (which IS in the gate's method list) every
+  2.5s with a 90s overall timeout. Replaces every
+  `connection.confirmTransaction()` call site in the runner.
+- `wsEndpoint` set to an unresolvable host on the Connection — we never
+  use subscriptions, and pinning it to a dead URL guarantees that any
+  accidental future `subscribe` call fails fast and loud rather than
+  silently chewing rate-limit budget.
+- Added `getBlockHeight` to the gate's RATE_LIMITED_METHODS list for
+  completeness (cheap and safer than the alternative).
+- Default `rpcRequestsPerSecond` lowered 5 → 3 — Helius free tier is
+  10 credits/sec and many of our calls are weighted >1; 3 RPS gives
+  reliable headroom even with Helius's variable credit budgets.
+- Default `maxConcurrentWallets` lowered 4 → 2 — concurrency interleaves
+  RPC calls; with the gate now strictly serial, fewer wallets in flight
+  at once produces less retry pressure during transient Helius dips.
+- New `process.on('unhandledRejection')` handler in main: silently drops
+  noisy rate-limit / fetch-failed / blockhash rejections that escape from
+  web3.js internals (we already handle them at the boundary). Real
+  unhandled bugs still log a single warning line.
+
 ## [1.0.1] — 2026-04-25
 
 ### Fixed: rate-limit storm on dry-runs over many wallets

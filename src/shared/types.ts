@@ -41,10 +41,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   burnNonZeroBalances: true,
   closeEmptyAccounts: true,
   closeNftAccounts: true,
-  maxConcurrentWallets: 4,
+  maxConcurrentWallets: 2,
   priorityFeeMicroLamports: 0,
   mintBlacklist: [...DEFAULT_MINT_BLACKLIST],
-  rpcRequestsPerSecond: 5
+  rpcRequestsPerSecond: 3
 };
 
 export interface ParsedWallet {
